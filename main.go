@@ -26,9 +26,6 @@ type Product struct {
 
 var products []Product
 
-var server = gin.Default()
-var ProductsGroup *gin.RouterGroup = server.Group("/products")
-
 func answerPong(c *gin.Context) {
 	c.String(200, "pong")
 }
@@ -130,11 +127,16 @@ func createProduct(c *gin.Context) {
 }
 
 func main() {
-
 	allProducts()
+	var server = gin.Default()
 
 	server.GET("/ping", answerPong)
-	Routes()
+
+	server.GET("/products", getProducts)
+	server.GET("/products/:id", getProductById)
+	server.GET("products/search/:priceGt", getProductsByPrice)
+	server.POST("/products", createProduct)
+
 	err := server.Run()
 	if err != nil {
 		log.Fatal(err)
