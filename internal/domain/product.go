@@ -1,4 +1,4 @@
-package main
+package domain
 
 type Product struct {
 	ID          int     `json:"id" omitempty`
