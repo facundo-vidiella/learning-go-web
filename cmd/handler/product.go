@@ -1,11 +1,9 @@
 package handler
 
 import (
+	"fmt"
 	"log"
-	"regexp"
 	"strconv"
-	"strings"
-	"time"
 
 	"github.com/facundo-vidiella/learning-go-web/internal/domain"
 	"github.com/facundo-vidiella/learning-go-web/internal/product"
@@ -13,7 +11,9 @@ import (
 )
 
 func GetProducts(c *gin.Context) {
-	c.JSON(200, product.Products)
+	repo := new(product.Repository)
+	products := repo.GetProducts()
+	c.JSON(200, products)
 }
 
 func GetProductById(c *gin.Context) {
@@ -21,16 +21,14 @@ func GetProductById(c *gin.Context) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	found := false
-	for _, n := range product.Products {
-		if n.ID == id {
-			c.JSON(200, n)
-			found = true
-		}
-	}
-	if !found {
+	repo := new(product.Repository)
+
+	product, err := repo.GetProductById(id)
+
+	if err != nil {
 		c.JSON(400, `errorMsg: No product found with that id`)
 	}
+	c.JSON(200, product)
 }
 
 func GetProductsByPrice(c *gin.Context) {
@@ -39,34 +37,20 @@ func GetProductsByPrice(c *gin.Context) {
 	if err != nil {
 		log.Fatal(err)
 	}
-	var validProducts []domain.Product
+	repo := new(product.Repository)
 
-	for _, n := range product.Products {
-		if n.Price > priceGt {
-			validProducts = append(validProducts, n)
-		}
-	}
+	validProducts := repo.GetProductsByPrice(priceGt)
 
 	if len(validProducts) == 0 {
 		c.JSON(400, `errorMsg: no products found with a price bigger than the one specified`)
 		return
 	}
+
 	jsonResponse := map[string]interface{}{
 		"total":    len(validProducts),
 		"products": validProducts,
 	}
 	c.JSON(200, jsonResponse)
-}
-
-func validateDate(date string) bool {
-	re := regexp.MustCompile(`\d{2}/\d{2}/\d{4}`)
-	currentTime := time.Now().Format("2006-01-02")
-	splitedCurrentTime := strings.Split(currentTime, "-")
-	splitedDate := strings.Split(date, "/")
-	if splitedCurrentTime[0] > splitedDate[2] {
-		return false
-	}
-	return re.MatchString(date)
 }
 
 func CreateProduct(c *gin.Context) {
@@ -79,30 +63,84 @@ func CreateProduct(c *gin.Context) {
 		return
 	}
 
-	if req.ID == 0 {
-		req.ID = len(product.Products) + 1
+	repo := new(product.Repository)
+
+	message, err := repo.CreateProduct(req)
+
+	if err != nil {
+		errMessage := fmt.Sprintf("%s: %s", err, message)
+		c.JSON(400, errMessage)
 	}
 
-	for _, n := range product.Products {
-		if n.CodeValue == req.CodeValue {
-			c.JSON(404, gin.H{
-				"error": "There is another product with the same code_value",
-			})
-			return
-		}
-	}
+	c.JSON(200, gin.H{
+		"success": message,
+	})
 
-	if !validateDate(req.Expiration) {
+}
+
+func UpdateProduct(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	var req domain.Product
+
+	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(400, gin.H{
-			"error": "Invalid date format or input",
+			"error": err.Error(),
 		})
 		return
 	}
 
-	product.Products = append(product.Products, req)
+	repo := new(product.Repository)
+	message, err := repo.UpdateProduct(id, req)
+	if err != nil {
+		errMessage := fmt.Sprintf("%s: %s", err, message)
 
-	c.JSON(200, gin.H{
-		"success": "product succesfully created",
-	})
+		c.JSON(400, errMessage)
+	}
+	c.JSON(200, message)
+}
 
+func UpdateProductField(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		log.Fatal(err)
+	}
+	var req domain.Product
+
+	if err := c.ShouldBindJSON(&req); err != nil {
+		c.JSON(400, gin.H{
+			"error": err.Error(),
+		})
+		return
+	}
+
+	repo := new(product.Repository)
+	message, err := repo.UpdateProductField(id, req)
+	if err != nil {
+		errMessage := fmt.Sprintf("%s: %s", err, message)
+
+		c.JSON(400, errMessage)
+	}
+	c.JSON(200, message)
+}
+
+func DeleteProduct(c *gin.Context) {
+	id, err := strconv.Atoi(c.Param("id"))
+	if err != nil {
+		log.Fatal(err)
+	}
+
+	repo := new(product.Repository)
+
+	err = repo.DeleteProduct(id)
+
+	if err != nil {
+		c.JSON(400, gin.H{
+			"Error": err,
+		})
+	}
+
+	c.JSON(204, "")
 }
